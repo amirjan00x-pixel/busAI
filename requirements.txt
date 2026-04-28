@@ -6,6 +6,13 @@
 openai>=1.0.0              # OpenRouter uses OpenAI-compatible API
 python-dotenv>=1.0.0       # Load .env file
 
+# Terminal & Web UI
+rich>=13.0.0               # Beautiful terminal output
+streamlit>=1.30.0          # Web UI dashboard
+
+# Search & Tools
+duckduckgo-search>=5.0.0   # Free web search (no API key)
+
 # Math & Simulation
 numpy>=1.24.0              # Monte Carlo simulations
 

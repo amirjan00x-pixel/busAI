@@ -25,15 +25,18 @@ def execute_python_code(code: str) -> dict:
             - variables (dict): Variables defined in the code's namespace
             - error (str): Error message if failed
     """
-    # Restricted namespace — only allow safe libraries
+    # Pre-import common libraries for the LLM to use
+    import numpy as np
+    import random
+    import math
+
+    # Restricted namespace — provide common math tools directly
     safe_globals = {
         "__builtins__": __builtins__,
-    }
-
-    # Allow importing only approved libraries
-    allowed_imports = {
-        "numpy", "np", "math", "random", "statistics",
-        "json", "collections", "itertools", "functools",
+        "np": np,
+        "numpy": np,
+        "random": random,
+        "math": math,
     }
 
     # Capture stdout
@@ -49,16 +52,28 @@ def execute_python_code(code: str) -> dict:
     }
 
     try:
+        # Run the code
         exec(code, safe_globals)
         result["success"] = True
         result["output"] = captured_output.getvalue()
 
-        # Extract user-defined variables (skip builtins and modules)
+        # Extract user-defined variables (including numpy types)
         for key, val in safe_globals.items():
-            if key.startswith("_"):
+            if key.startswith("_") or key in ["np", "numpy", "random", "math"]:
                 continue
-            if isinstance(val, (int, float, str, bool, list, dict, tuple)):
-                result["variables"][key] = val
+            
+            # Check for numeric types (including numpy.float64, etc.)
+            if hasattr(val, "__float__") or isinstance(val, (int, float, str, bool, list, dict, tuple)):
+                try:
+                    # Convert numpy scalars to regular python types for JSON/display
+                    if hasattr(val, "item") and callable(val.item):
+                        result["variables"][key] = val.item()
+                    elif hasattr(val, "__float__"):
+                        result["variables"][key] = float(val)
+                    else:
+                        result["variables"][key] = val
+                except:
+                    result["variables"][key] = val
 
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"

@@ -37,10 +37,11 @@ class LLMProvider:
                 "Get your key from: https://openrouter.ai/keys"
             )
 
-        # One OpenAI client pointed at OpenRouter
+        # One OpenAI client pointed at OpenRouter (with strict 45s timeout)
         self.client = OpenAI(
             base_url=self.BASE_URL,
             api_key=self.api_key,
+            timeout=45.0,
         )
 
         # Load model for each agent from .env

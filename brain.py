@@ -85,8 +85,8 @@ class WarRoom:
                 └────── (if NEEDS_REVISION) ─────────┘
     """
 
-    MAX_DEBATE_ROUNDS = 5       # Prevent infinite loops
-    MAX_REVISION_CYCLES = 3     # Max times the idea can loop back
+    MAX_DEBATE_ROUNDS = 1       # Reduced from 5 to 1 for speed
+    MAX_REVISION_CYCLES = 1     # Reduced from 3 to 1 for speed
     CONSENSUS_THRESHOLD = 0.6   # 60% agreement needed for consensus
 
     def __init__(self, llm_provider=None):
@@ -270,20 +270,20 @@ class WarRoom:
             print("\n  ❌ VERDICT: REJECTED — Fatal flaws identified.")
 
         # Case 2: Strong approval across the board
-        elif avg_score >= 7.0 and executioner_score >= 5.0:
+        elif avg_score >= 6.5 and executioner_score >= 4.5:
             verdict = Verdict.APPROVED
             print("\n  ✅ VERDICT: APPROVED — Idea is viable!")
 
         # Case 3: Fixable issues exist
-        elif executioner_score < 5.0 and avg_score >= 5.0:
+        elif executioner_score < 4.0 and avg_score >= 5.5:
             if self.revision_count < self.MAX_REVISION_CYCLES:
                 verdict = Verdict.NEEDS_REVISION
                 self.revision_count += 1
                 print(f"\n  🔄 VERDICT: NEEDS REVISION (cycle {self.revision_count}/{self.MAX_REVISION_CYCLES})")
             else:
-                # Too many revisions — force a decision
-                verdict = Verdict.NO_CONSENSUS
-                print("\n  ⚠️  VERDICT: NO CONSENSUS — Max revisions reached.")
+                # Too many revisions — if avg is still okay, approve with warnings
+                verdict = Verdict.APPROVED
+                print("\n  ✅ VERDICT: APPROVED (After max revisions, proceed with extreme caution)")
 
         # Case 4: Moderate approval
         elif avg_score >= 5.0:
