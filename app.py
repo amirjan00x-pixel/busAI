@@ -1,13 +1,6 @@
-"""
-🌐 app.py — The Iron Ledger Web UI (Streamlit)
-================================================
-A beautiful Web UI for The Iron Ledger War Room.
-Run with: streamlit run app.py
-"""
-
 import streamlit as st
-import concurrent.futures
 import time
+import re
 
 from models.llm_provider import LLMProvider
 from agents.strategist import Strategist
@@ -18,75 +11,146 @@ from brain import WarRoom, Verdict
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="The Iron Ledger | War Room",
-    page_icon="⚔️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="The Iron Ledger | Chat",
+    page_icon="💬",
+    layout="centered"
 )
 
-# --- Custom CSS for Styling ---
+# --- Initialization ---
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "name": "System",
+            "content": "سلام! به **اتاق جنگ The Iron Ledger** خوش آمدی. من اینجا هستم تا ایده‌ت رو برای جنگ آماده کنم.\n\nابتدا لطفاً **ایده بیزنس** خودت رو کامل توضیح بده."
+        }
+    ]
+if "phase" not in st.session_state:
+    st.session_state.phase = "intake_idea"
+if "idea_data" not in st.session_state:
+    st.session_state.idea_data = {}
+
+# --- CSS for specific elements ---
 st.markdown("""
 <style>
-    .verdict-approved { background-color: #1e3a1e; border: 2px solid #2e8b57; padding: 20px; border-radius: 10px; text-align: center; }
-    .verdict-rejected { background-color: #3a1e1e; border: 2px solid #8b0000; padding: 20px; border-radius: 10px; text-align: center; }
-    .verdict-revision { background-color: #3a381e; border: 2px solid #b8860b; padding: 20px; border-radius: 10px; text-align: center; }
-    .stAlert { margin-top: 10px; }
+    .agent-name { font-weight: bold; color: #d35400; }
+    .verdict-box { padding: 20px; border-radius: 10px; text-align: center; color: white; margin-top: 20px;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Helpers ---
-def display_agent_analysis(analysis, icon, title):
-    with st.expander(f"{icon} {title} (Score: {analysis.score}/10)", expanded=True):
-        st.markdown(f"**Final Score:** `{analysis.score}/10`")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("🔴 **Key Risks**")
-            for risk in analysis.key_risks[:3]:
-                st.write(f"- {risk}")
-        with col2:
-            st.markdown("🟢 **Key Strengths**")
-            for strength in analysis.key_strengths[:3]:
-                st.write(f"- {strength}")
-                
-        st.divider()
-        st.markdown("📝 **Full Analysis**")
-        st.info(analysis.analysis)
+st.title("⚔️ The Iron Ledger")
+st.markdown("*Survival of the fittest ideas.*")
+st.divider()
 
-
-# --- Main UI ---
-st.title("⚔️ THE IRON LEDGER: WAR ROOM")
-st.markdown("Submit your business idea. 4 ruthless AI agents will dissect it, simulate it, and try to **DESTROY** it.")
-
-# --- Sidebar Intake Form ---
+# --- Display Active Models Sidebar ---
 with st.sidebar:
-    st.header("📋 Idea Intake Form")
-    with st.form("intake_form"):
-        description = st.text_area("💡 Describe your business idea", height=150)
-        budget = st.number_input("💰 Initial budget (USD)", value=50000, step=5000)
-        target_market = st.text_input("🌍 Target market / country", value="Global")
-        revenue_model = st.text_input("💳 Revenue model", value="Subscription")
-        competitors_str = st.text_input("🏢 Known competitors", value="None")
-        
-        submitted = st.form_submit_button("🔥 START WAR ROOM", use_container_width=True)
+    st.header("🤖 شبکه‌های عصبی فعال")
+    st.markdown("سیستم واقعاً از **۴ هوش مصنوعی مجزا** (Multi-Agent) استفاده می‌کند. موتورهای پردازشی متصل شده:")
+    try:
+        temp_llm = LLMProvider()
+        st.success(f"**🧠 استراتژیست:**\n`{temp_llm.models['strategist'].split('/')[-1]}`")
+        st.info(f"**🔍 محقق (متصل به وب):**\n`{temp_llm.models['researcher'].split('/')[-1]}`")
+        st.warning(f"**📊 کوانت (کدنویس):**\n`{temp_llm.models['quant'].split('/')[-1]}`")
+        st.error(f"**⚔️ جلاد (منتقد):**\n`{temp_llm.models['executioner'].split('/')[-1]}`")
+    except:
+        st.markdown("*در حال اتصال به سرور...*")
 
-# --- Execution Pipeline ---
-if submitted:
-    if not description.strip():
-        st.error("Please describe your business idea first!")
-        st.stop()
+# --- Display Chat History ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        if msg.get("name"):
+            st.markdown(f"<span class='agent-name'>{msg['name']}</span>", unsafe_allow_html=True)
+        st.write(msg["content"])
 
-    idea = {
-        "description": description,
-        "budget": budget,
-        "target_market": target_market,
-        "revenue_model": revenue_model,
-        "competitors": [c.strip() for c in competitors_str.split(",") if c.strip() and c.lower() != 'none']
-    }
+# --- User Intake & Chat Logic ---
+if st.session_state.phase == "intake_idea":
+    user_input = st.chat_input("پاسخ خود را اینجا بنویسید...")
+    
+    if user_input:
+        # Display user message
+        st.session_state.messages.append({"role": "user", "name": "You", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown("<span class='agent-name'>You</span>", unsafe_allow_html=True)
+            st.write(user_input)
+            
+        with st.spinner("در حال پردازش..."):
+            try:
+                llm = LLMProvider()
+                sys_prompt = """تو نماینده بی‌رحم و جدی «اتاق جنگ بیزنس (The Iron Ledger)» هستی. وظیفه تو مصاحبه با کاربر است.
+باید ۵ اطلاعات زیر را از او بگیری:
+1. ایده بیزنس (توضیح)
+2. بودجه اولیه (به دلار)
+3. بازار هدف / کشور
+4. مدل درآمدی
+5. رقبای اصلی
 
-    st.divider()
+قوانین:
+- لحن تو سرد، کاملاً جدی و حرفه‌ای است. اینجا جای شوخی نیست.
+- اگر کاربر پاسخ نامربوط داد (مثل "سلام"، "به تو چه"، "نمیدونم")، با جدیت به او اخطار بده که وقتت را تلف نکند و دوباره سوالت را بپرس.
+- یکی یکی سوال بپرس تا کاربر گیج نشود. (مثلاً اول ایده رو کامل بپرس، بعد بودجه و...).
+- وقتی تمام ۵ مورد به درستی مشخص شد، در انتهای پیامت دقیقاً عبارت [DATA_READY] را چاپ کن و سپس یک بلاک JSON با ساختار زیر بده:
+```json
+{
+  "description": "...",
+  "budget": 50000,
+  "target_market": "...",
+  "revenue_model": "...",
+  "competitors": ["...", "..."]
+}
+```
+"""
+                # Build message history for LLM
+                api_messages = [{"role": "system", "content": sys_prompt}]
+                for m in st.session_state.messages:
+                    # Pass user and assistant messages (ignore custom formatting names for API)
+                    api_messages.append({"role": m["role"], "content": m["content"]})
+                        
+                # Call LLM
+                response = llm.client.chat.completions.create(
+                    model=llm.models["strategist"],
+                    messages=api_messages,
+                    temperature=0.7,
+                    max_tokens=1000
+                ).choices[0].message.content
+                
+                reply = response
+                
+                # Check if interview is complete
+                if "[DATA_READY]" in response:
+                    json_match = re.search(r'```(?:json)?\s*\n(.*?)\n\s*```', response, re.DOTALL)
+                    if json_match:
+                        import json
+                        try:
+                            # Cleanup and ensure budget is a number
+                            parsed_data = json.loads(json_match.group(1))
+                            if isinstance(parsed_data.get("budget"), str):
+                                nums = re.findall(r'\d+', parsed_data["budget"].replace(',', ''))
+                                parsed_data["budget"] = float(nums[0]) if nums else 50000.0
+                                
+                            st.session_state.idea_data = parsed_data
+                            st.session_state.phase = "war_room_running"
+                            reply = response.split("[DATA_READY]")[0].strip() + "\n\n🔥 **اطلاعات تکمیل شد. درهای اتاق جنگ در حال باز شدن است...**"
+                        except Exception as parse_e:
+                            reply = response.replace("[DATA_READY]", "").strip() + f"\n*(خطا در پردازش اطلاعات، لطفاً داده‌ها را دوباره چک کنید: {parse_e})*"
+                    else:
+                        reply = response.replace("[DATA_READY]", "").strip() + "\n*(سیستم نتوانست فایل نهایی را بخواند، لطفاً ادامه بدهید)*"
 
-    # Initialization
+            except Exception as e:
+                reply = f"خطای ارتباط با سرور هوش مصنوعی: {e}"
+
+        # Display assistant reply
+        st.session_state.messages.append({"role": "assistant", "name": "Interviewer", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown("<span class='agent-name'>Interviewer</span>", unsafe_allow_html=True)
+            st.write(reply)
+
+        st.rerun()
+
+# --- Run War Room ---
+if st.session_state.phase == "war_room_running":
+    idea = st.session_state.idea_data
+    
+    # Initialize Agents
     try:
         llm = LLMProvider()
         war_room = WarRoom(llm_provider=llm)
@@ -100,120 +164,129 @@ if submitted:
         war_room.register_agent("quant", quant)
         war_room.register_agent("executioner", executioner)
     except Exception as e:
-        st.error(f"Failed to initialize systems: {e}")
+        st.error(f"خطا در اتصال به API: {e}")
         st.stop()
 
-    # --- PHASE 1: Intelligence Gathering ---
-    st.header("📡 Phase 1: Intelligence Gathering")
-    
     analyses = []
     
-    with st.spinner("🤖 Visionary, Spy, and Quant are analyzing simultaneously (this may take up to 45s)..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            f_strat = executor.submit(strategist.analyze, idea)
-            f_res = executor.submit(researcher.analyze, idea)
-            f_quant = executor.submit(quant.analyze, idea)
-            
-            # Strategist
-            try:
-                strat_res = f_strat.result()
-                analyses.append(strat_res)
-            except Exception as e:
-                st.error(f"Strategist failed: {e}")
-                
-            # Researcher
-            try:
-                res_res = f_res.result()
-                analyses.append(res_res)
-            except Exception as e:
-                st.error(f"Researcher failed: {e}")
-                
-            # Quant
-            try:
-                quant_res = f_quant.result()
-                analyses.append(quant_res)
-            except Exception as e:
-                st.error(f"Quant failed: {e}")
-
-    # Display Phase 1 results
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if len(analyses) > 0: display_agent_analysis(analyses[0], "🧠", "The Visionary")
-    with col2:
-        if len(analyses) > 1: display_agent_analysis(analyses[1], "🔍", "The Spy")
-    with col3:
-        if len(analyses) > 2: display_agent_analysis(analyses[2], "📊", "The Quant")
-
-    # Executioner Phase
-    st.header("⚔️ The Executioner Enters")
-    with st.spinner("The Executioner is reviewing the data and preparing the kill shots..."):
+    # Phase 1: Sequential but visible execution
+    st.markdown("### 📡 در حال جمع‌آوری اطلاعات...")
+    
+    with st.status("مأمورها در حال کار روی ایده شما هستند...", expanded=True) as status:
+        st.write(f"🧠 **The Visionary** *(پردازش با: {llm.models['strategist'].split('/')[-1]})* در حال ساخت مدل...")
         try:
-            exec_res = executioner.analyze(idea, prior_analyses=analyses)
-            analyses.append(exec_res)
-            display_agent_analysis(exec_res, "⚔️", "The Executioner")
-        except Exception as e:
-            st.error(f"Executioner failed: {e}")
-
-    # --- PHASE 2: Debate ---
-    if len(analyses) >= 3:
-        st.header("💬 Phase 2: The Debate")
-        with st.spinner("Agents are debating..."):
-            debate_log = war_room.run_debate(analyses, idea)
+            analyses.append(strategist.analyze(idea))
+            st.write("✅ مدل تجاری ساخته شد.")
+        except Exception as e: st.write(f"❌ خطای استراتژیست: {e}")
             
-            for msg in debate_log:
-                role = "assistant" if msg.sender == "executioner" else "user"
-                avatar = "⚔️" if msg.sender == "executioner" else "🧠"
-                
-                with st.chat_message(role, avatar=avatar):
-                    st.markdown(f"**{msg.sender.upper()}** ({msg.message_type}):")
-                    st.write(msg.content)
-    else:
-        debate_log = []
+        st.write(f"🔍 **The Spy** *(پردازش با: {llm.models['researcher'].split('/')[-1]})* در حال جستجوی وب...")
+        try:
+            analyses.append(researcher.analyze(idea))
+            st.write("✅ اطلاعات بازار جمع‌آوری شد.")
+        except Exception as e: st.write(f"❌ خطای محقق: {e}")
+            
+        st.write(f"📊 **The Quant** *(پردازش با: {llm.models['quant'].split('/')[-1]})* در حال شبیه‌سازی مالی...")
+        try:
+            analyses.append(quant.analyze(idea))
+            st.write("✅ شبیه‌سازی مالی تمام شد.")
+        except Exception as e: st.write(f"❌ خطای ریاضیات: {e}")
+            
+        st.write(f"⚔️ **The Executioner** *(پردازش با: {llm.models['executioner'].split('/')[-1]})* در حال صدور کیفرخواست...")
+        try:
+            analyses.append(executioner.analyze(idea, prior_analyses=analyses))
+            st.write("✅ کیفرخواست آماده شد.")
+        except Exception as e: st.write(f"❌ خطای جلاد: {e}")
+            
+        status.update(label="✅ تحقیقات اولیه تمام شد!", state="complete", expanded=False)
 
-    # --- PHASE 3: Verdict ---
-    st.header("⚖️ Final Judgment")
-    with st.spinner("Calculating final verdict..."):
+    st.divider()
+
+    # --- SHOW AGENT REPORTS (Clean & Minimalist) ---
+    with st.chat_message("assistant"):
+        st.markdown("<span style='color:#3498db; font-weight:bold;'>🤖 System</span>", unsafe_allow_html=True)
+        st.write("✅ گزارش‌های فوق‌محرمانه مأمورها آماده شد.")
+        
+        with st.expander("📂 مشاهده جزئیات گزارش‌ها و کدهای پایتون (کلیک کنید)", expanded=False):
+            tabs = st.tabs(["🧠 استراتژیست", "🔍 محقق", "📊 کوانت", "⚔️ جلاد"])
+            names = ["strategist", "researcher", "quant", "executioner"]
+            for i, analysis in enumerate(analyses):
+                if i < len(tabs):
+                    with tabs[i]:
+                        model_name = llm.models.get(names[i], "Unknown").split('/')[-1]
+                        st.caption(f"پردازشگر: {model_name}")
+                        st.markdown(analysis.analysis)
+                        
+    # Add a minimal note to chat history
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "name": "System", 
+        "content": "✅ گزارش‌های مأمورها تدوین شد. (جهت سادگی چت، در پوشه مخفی قرار گرفت)"
+    })
+
+    st.divider()
+
+    # Phase 2: The Debate
+    st.markdown("### 💬 مناظره زنده")
+    
+    with st.spinner("مأمورها در حال جنگ و بحث با یکدیگر هستند..."):
+        debate_log = war_room.run_debate(analyses, idea)
+        
+    for msg in debate_log:
+        role = "assistant"
+        icon = "⚔️" if msg.sender == "executioner" else "🤖"
+        color = "#e74c3c" if msg.message_type == "challenge" else "#2ecc71" if msg.message_type == "defense" else "#3498db"
+        
+        label = f"{icon} {msg.sender.upper()} [{msg.message_type}]"
+        content = msg.content
+        
+        # Display in chat and save to session
+        st.session_state.messages.append({"role": role, "name": label, "content": content})
+        
+        with st.chat_message(role):
+            st.markdown(f"<span style='color:{color}; font-weight:bold;'>{label}</span>", unsafe_allow_html=True)
+            st.write(content)
+
+    # Phase 3: The Verdict
+    st.divider()
+    st.markdown("### ⚖️ حکم نهایی")
+    
+    with st.spinner("صدور رأی نهایی..."):
         verdict = war_room.evaluate_consensus(analyses)
         report = war_room.build_report(idea, verdict, analyses, debate_log)
         
-        v_class = ""
-        v_icon = ""
-        v_text = ""
-        if verdict == Verdict.APPROVED:
-            v_class = "verdict-approved"
-            v_icon = "✅"
-            v_text = "IDEA APPROVED"
-        elif verdict == Verdict.REJECTED:
-            v_class = "verdict-rejected"
-            v_icon = "💀"
-            v_text = "IDEA REJECTED"
-        else:
-            v_class = "verdict-revision"
-            v_icon = "🔄"
-            v_text = "NEEDS REVISION / NO CONSENSUS"
-
-        st.markdown(f"""
-        <div class="{v_class}">
-            <h1>{v_icon} {v_text}</h1>
-            <h3>Score: {report.final_score}/10 | Probability: {report.success_probability*100:.1f}%</h3>
-        </div>
-        """, unsafe_allow_html=True)
+    bg_color = "#2ecc71" if verdict == Verdict.APPROVED else "#e74c3c" if verdict == Verdict.REJECTED else "#f39c12"
+    v_text = "تایید شد (APPROVED)" if verdict == Verdict.APPROVED else "رد شد (REJECTED)" if verdict == Verdict.REJECTED else "نیاز به اصلاح (NEEDS REVISION)"
+    
+    st.markdown(f"""
+    <div class="verdict-box" style="background-color: {bg_color};">
+        <h1>{v_text}</h1>
+        <h3>امتیاز نهایی: {report.final_score}/10</h3>
+        <h3>احتمال موفقیت مالی: {report.success_probability * 100:.1f}%</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("#### 🔴 بزرگترین ریسک‌ها")
+    for r in report.risk_analysis.get("critical_risks", [])[:3]: st.write(f"🔻 {r}")
         
-        # Financial Metrics
-        if report.financial_data:
-            st.subheader("💰 Financial Summary")
-            m1, m2, m3, m4 = st.columns(4)
-            fin = report.financial_data
-            if "roi" in fin: m1.metric("ROI", f"{fin['roi']:.1f}%")
-            if "mean_profit" in fin: m2.metric("Mean Profit", f"${fin['mean_profit']:,.0f}")
-            if "worst_case" in fin: m3.metric("Worst Case (5%)", f"${fin['worst_case']:,.0f}")
-            if "break_even_months" in fin: m4.metric("Break-Even", f"{fin['break_even_months']} mo")
+    st.markdown("#### 🟢 نقاط قوت")
+    for s in report.risk_analysis.get("strengths", [])[:3]: st.write(f"✅ {s}")
 
-        st.divider()
-        
-        # Recommendations
-        st.subheader("📋 Final Recommendations")
-        for rec in report.recommendations:
-            st.write(rec)
-            
-        st.balloons() if verdict == Verdict.APPROVED else None
+    st.markdown("#### 📋 توصیه‌های اتاق جنگ")
+    for rec in report.recommendations: st.write(f"👉 {rec}")
+
+    if report.financial_data:
+        fin = report.financial_data
+        st.info(f"💰 **ROI:** {fin.get('roi', 0):.1f}%  |  **میانگین سود:** ${fin.get('mean_profit', 0):,.0f}  |  **بدترین حالت:** ${fin.get('worst_case', 0):,.0f}")
+
+    # End state
+    st.session_state.phase = "finished"
+    st.session_state.messages.append({
+        "role": "assistant",
+        "name": "System",
+        "content": f"پرونده بسته شد. حکم نهایی: **{v_text}**. اگر می‌خواهی ایده جدیدی تست کنی، صفحه مرورگر را رفرش کن."
+    })
+    
+    if st.button("تست ایده جدید"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()

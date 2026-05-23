@@ -85,7 +85,7 @@ class WarRoom:
                 └────── (if NEEDS_REVISION) ─────────┘
     """
 
-    MAX_DEBATE_ROUNDS = 1       # Reduced from 5 to 1 for speed
+    MAX_DEBATE_ROUNDS = 2       # Increased to 2 for deep, brutal fighting
     MAX_REVISION_CYCLES = 1     # Reduced from 3 to 1 for speed
     CONSENSUS_THRESHOLD = 0.6   # 60% agreement needed for consensus
 
